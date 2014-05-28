@@ -24,6 +24,7 @@
  */
 
 require_once(dirname(dirname(dirname(__FILE__))).'/config.php');
+require_once(dirname(dirname(dirname(__FILE__))).'/lib/completionlib.php');
 require_once(dirname(__FILE__).'/locallib.php');
 
 $id  = optional_param('id', 0, PARAM_INT); // course_module ID, or
@@ -45,6 +46,10 @@ require_capability('mod/hotpot:view', $PAGE->context);
 
 // Create an object to represent the current HotPot activity
 $hotpot = hotpot::create($hotpot, $cm, $course, $PAGE->context);
+
+// Update 'viewed' state if required by completion system
+$completion = new completion_info($course);
+$completion->set_module_viewed($cm);
 
 if (empty($hotpot->entrypage)) {
     // go straight to attempt.php

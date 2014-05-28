@@ -49,7 +49,7 @@ class hotpot_source_html_xhtml extends hotpot_source_html {
      * @param xxx $sourcefile
      * @return xxx
      */
-    public static function is_quizfile($sourcefile)  {
-        return preg_match('/\.html?$/', $sourcefile->get_filename());
+    static public function is_quizfile($sourcefile)  {
+        return preg_match('/\.x?html?$/', $sourcefile->get_filename());
     }
 } // end class

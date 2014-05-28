@@ -60,7 +60,7 @@ class mod_hotpot_storage {
      *
      * @param xxx $hotpot
      */
-    public static function store($hotpot)  {
+    static public function store($hotpot)  {
         global $CFG, $DB, $USER;
 
         if (empty($hotpot->attempt)) {
@@ -110,7 +110,9 @@ class mod_hotpot_storage {
         $startfield = self::durationstartfield; // "starttime" or "timestart"
         $finishfield = self::durationfinishfield; // "endtime" or "timefinish"
         $duration = ($hotpot->attempt->$finishfield - $hotpot->attempt->$startfield);
-        if ($duration > 0) {
+        if (empty($hotpot->attempt->duration)) {
+            $hotpot->attempt->duration = $duration;
+        } else if ($duration > 0) {
             $hotpot->attempt->duration += $duration;
         }
         unset($duration, $startfield, $finishfield);
@@ -146,7 +148,7 @@ class mod_hotpot_storage {
 
         // add details of this quiz attempt, if required
         // "hotpot_storedetails" is set by administrator
-        // Site Admin -> Modules -> Activities -> QuizPort
+        // Site Admin -> Modules -> Activities -> HotPot
         if ($CFG->hotpot_storedetails) {
 
             // delete/update/add the details record
@@ -182,7 +184,7 @@ class mod_hotpot_storage {
      * @param xxx $old_string (passed by reference)
      * @return xxx
      */
-    function pre_xmlize(&$old_string)  {
+    static public function pre_xmlize(&$old_string)  {
         $new_string = '';
         $str_start = 0;
         while (($cdata_start = strpos($old_string, '<![CDATA[', $str_start)) && ($cdata_end = strpos($old_string, ']]>', $cdata_start))) {
@@ -199,12 +201,12 @@ class mod_hotpot_storage {
      *
      * @param xxx $attempt (passed by reference)
      */
-    function store_details($attempt)  {
+    static public function store_details($attempt)  {
 
         // encode ampersands so that HTML entities are preserved in the XML parser
         // N.B. ampersands inside <![CDATA[ ]]> blocks do NOT need to be encoded
         // disabled 2008.11.20
-        // $attempt->details = $this->pre_xmlize($attempt->details);
+        // $attempt->details = self::pre_xmlize($attempt->details);
 
         // parse the attempt details as xml
         $details = xmlize($attempt->details);
@@ -330,7 +332,7 @@ class mod_hotpot_storage {
      * @param xxx $question (passed by reference)
      * @param xxx $response (passed by reference)
      */
-    function add_response(&$attempt, &$question, &$response)  {
+    static public function add_response(&$attempt, &$question, &$response)  {
         global $DB;
 
         if (! $question || ! $response || ! isset($question->name)) {

@@ -44,13 +44,13 @@ class hotpot_source_hp_6_jmix_html extends hotpot_source_hp_6_jmix {
      * @param xxx $sourcefile
      * @return xxx
      */
-    public static function is_quizfile($sourcefile)  {
+    static public function is_quizfile($sourcefile)  {
         if (! preg_match('/\.html?$/', $sourcefile->get_filename())) {
             // wrong file type
             return false;
         }
 
-        if (! $content = $sourcefile->get_content()) {
+        if (! $content = self::get_content($sourcefile)) {
             // empty or non-existant file
             return false;
         }
@@ -62,9 +62,11 @@ class hotpot_source_hp_6_jmix_html extends hotpot_source_hp_6_jmix {
             }
         }
 
-        if (! strpos($content, 'var Segments = new Array();')) {
-            // not jmix (file
-            return false;
+        if (! strpos($content, '<div id="SegmentDiv">')) { // drop-down
+            if (! strpos($content, '<div id="Drop')) { // drag-and-drop
+                // not a jmix file
+                return false;
+            }
         }
 
         return true;

@@ -93,11 +93,11 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
      * "wwwroot" is not stored explicitly because it is included in the md5key
      */
     protected $cache_CFG_fields = array(
-        'slasharguments','hotpot_enableobfuscate','hotpot_enableswf'
+        'slasharguments','hotpot_bodystyles','hotpot_enableobfuscate','hotpot_enableswf'
     );
 
     /**
-     * these fields in the quiz record must match those in the "hotpot_cache" table
+     * these fields in the hotpot record must match those in the "hotpot_cache" table
      * "outputformat" is not stored explicitly because it is included in the md5key
      */
     protected $cache_hotpot_fields = array(
@@ -186,7 +186,7 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
      *
      * @return array of source file types
      */
-    public static function sourcetypes() {
+    static public function sourcetypes() {
         return array();
     }
 
@@ -201,7 +201,7 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
      *  - $this->page->requires->js_module('hotpot'); // gets mod/hotpot/module.js
      *  - $this->page->requires->js_init_call('M.mod_hotpot.secure_window.init');
      *
-     * @param hotpot object
+     * @param xxx $hotpot object
      * @return string html
      */
     public function render_attempt($hotpot, $cacheonly=false) {
@@ -660,11 +660,21 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
         }
 
         // custom fields
-        if (isset($this->hotpot->source) && $this->cache->timemodified < $this->hotpot->source->filemtime($this->cache->sourcelastmodified, $this->cache->sourceetag)) {
-            return false; // sourcefile file has been modified
-        }
-        if (isset($this->hotpot->source->config) && $this->cache->timemodified < $this->hotpot->source->config->filemtime($this->cache->configlastmodified, $this->cache->configetag)) {
-            return false; // config file has been modified
+        $fileareas = array('source', 'config');
+        foreach ($fileareas as $filearea) {
+            if (isset($this->hotpot->$filearea) && $this->hotpot->$filearea) {
+                $lastmodified = $filearea.'lastmodified';
+                $etag = $filearea.'etag';
+                if ($this->cache->timemodified < $this->hotpot->$filearea->filemtime($this->cache->$lastmodified, $this->cache->$etag)) {
+                    return false; // file has been modified
+                }
+                if (method_exists($this->hotpot->$filearea->file, 'get_repository_id')) {
+                    $repositoryid = $filearea.'repositoryid';
+                    if ($this->cache->$repositoryid != $this->hotpot->$filearea->file->get_repository_id()) {
+                        return false; // different repository
+                    }
+                }
+            }
         }
 
         if ($this->hotpot->useglossary) {
@@ -717,7 +727,7 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
 
         // transfer $CFG fields to cache record
         foreach ($this->cache_CFG_fields as $field) {
-            $this->cache->$field = $CFG->$field;
+            $this->cache->$field = trim($CFG->$field);
         }
 
         // transfer quiz fields to cache record
@@ -731,6 +741,18 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
             $configfield = 'config'.$field;
             $this->cache->$sourcefield = ''; // $this->hotpot->source->$field;
             $this->cache->$configfield = ''; // $this->hotpot->source->config->$field;
+        }
+
+        $fileareas = array('source', 'config');
+        foreach ($fileareas as $filearea) {
+            $this->cache->{$filearea.'repositoryid'} = 0; // default
+            if (isset($this->hotpot->$filearea->file)) {
+                if (method_exists($this->hotpot->$filearea->file, 'get_repository_id')) {
+                    if ($repositoryid = $this->hotpot->$filearea->file->get_repository_id()) {
+                        $this->cache->{$filearea.'repositoryid'} = $repositoryid;
+                    }
+                }
+            }
         }
 
         // create content object
@@ -798,8 +820,7 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
             $title .= ' ('.$this->sortorder.')';
         }
 
-        $textlib = textlib_get_instance();
-        $title = $textlib->utf8_to_entities($title);
+        $title = hotpot_textlib('utf8_to_entities', $title);
 
         return $title;
     }
@@ -839,14 +860,12 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
      * @param xxx $type
      * @return xxx
      */
-    function can_resume($type)  {
-        global $QUIZPORT;
-        if ($type=='unit' || ($type=='quiz' && $this->provide_resume())) {
-            if (isset($QUIZPORT->$type) && $QUIZPORT->$type->allowresume) {
-                return true;
-            }
+    function can_resume()  {
+        if ($this->provide_resume() && isset($this->hotpot) && $this->hotpot->allowresume) {
+            return true;
+        } else {
+            return false;
         }
-        return false;
     }
 
     // can the current unit/quiz be restarted after the current attempt finishes?
@@ -854,14 +873,12 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
     /**
      * can_restart
      *
-     * @param xxx $type
      * @return xxx
      */
-    function can_restart($type)  {
-        global $QUIZPORT;
-        if (isset($QUIZPORT->$type) && $QUIZPORT->$type->attemptlimit) {
-            if ($attempts = $QUIZPORT->get_attempts($type)) {
-                if (count($attempts) >= $QUIZPORT->$type->attemptlimit) {
+    function can_restart()  {
+        if (isset($this->hotpot) && $this->hotpot->attemptlimit) {
+            if ($countattempts = $this->hotpot->get_attempts()) {
+                if ($countattempts >= $this->hotpot->attemptlimit) {
                     return false;
                 }
             }
@@ -875,15 +892,10 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
      * @return xxx
      */
     function can_continue()  {
-        if ($this->can_resume('unit')) {
-            if ($this->can_resume('quiz')) {
-                return hotpot::CONTINUE_RESUMEQUIZ;
-            } else if ($this->can_restart('quiz')) {
-                return hotpot::CONTINUE_RESTARTQUIZ;
-            }
-        }
-        if ($this->can_restart('unit')) {
-            return hotpot::CONTINUE_RESTARTUNIT;
+        if ($this->can_resume()) {
+            return hotpot::CONTINUE_RESUMEQUIZ;
+        } else if ($this->can_restart()) {
+            return hotpot::CONTINUE_RESTARTQUIZ;
         } else {
             return hotpot::CONTINUE_ABANDONUNIT;
         }
@@ -902,6 +914,99 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
         }
     }
 
+
+    /**
+     * require_response
+     *
+     * @param xxx $hotpot object
+     * @return mixed URL or boolean true/false
+     */
+    public function require_response($hotpot) {
+
+        // initialize some important properties
+        $this->init($hotpot);
+
+        // decide whether or not we need to redirect after receiving the attempt results
+        switch (true) {
+            case $this->hotpot->attempt->status==hotpot::STATUS_INPROGRESS:
+                // this attempt is still in progress
+                $response = hotpot::HTTP_204_RESPONSE;
+                break;
+
+            case $this->hotpot->attempt->redirect==0:
+                // this attempt has told us not to do anything
+                $response = hotpot::HTTP_204_RESPONSE;
+                break;
+
+            //case $this->hotpot->delay3==hotpot::TIME_DISABLE:
+            //    // results have already been saved
+            //    $response = hotpot::HTTP_204_RESPONSE;
+            //    break;
+
+            case $this->hotpot->attempt->status==hotpot::STATUS_ABANDONED:
+                // check whether we can continue this attempt
+                switch ($this->can_continue()) {
+                    case hotpot::CONTINUE_RESUMEQUIZ:  $response = true; break;
+                    case hotpot::CONTINUE_RESTARTQUIZ: $response = true; break;
+                    case hotpot::CONTINUE_RESTARTUNIT: $response = empty($this->hotpot->entrypage); break;
+                    case hotpot::CONTINUE_ABANDONUNIT: $response = false; break;
+                    default: $response = false; // shouldn't happen !!
+                }
+                if ($response) {
+                    //$response = $this->hotpot->view_url();
+                    $response = hotpot::HTTP_NO_RESPONSE;
+                } else {
+                    $response = hotpot::HTTP_NO_RESPONSE;
+                }
+                break;
+
+            default:
+                // do not send a response to the browser
+                $response = hotpot::HTTP_NO_RESPONSE;
+        }
+
+        // if we don't need an exit page, go straight back to the next activity or course page (or retry this hotpot)
+        if (is_int($response) && $response==hotpot::HTTP_NO_RESPONSE && empty($this->hotpot->exitpage)) {
+            if ($this->hotpot->require_exitgrade() && $this->hotpot->attempt->score < $this->hotpot->exitgrade) {
+                // score was not good enough, so do automatic retry
+                $response = $this->hotpot->attempt_url();
+            } else if ($cm = $this->hotpot->get_cm('exit')) {
+                // display next activity
+                $response = $this->hotpot->view_url($cm);
+            } else {
+                // return to course page
+                $response = $this->hotpot->course_url();
+            }
+        }
+
+        return $response;
+    }
+
+    /**
+     * send_response
+     *
+     * @param mixed $response URL or boolean true/false
+     * @return void, but may redirect browser and exit PHP script
+     */
+    function send_response($response) {
+
+        if ($response===hotpot::HTTP_NO_RESPONSE) {
+            return; // do nothing - unexpected !!
+        }
+
+        if ($response===hotpot::HTTP_204_RESPONSE) {
+            // may be better to check to see if the user is trying to navigate away
+            // from the page, in which case we should just die and not send the header
+            header("HTTP/1.0 204 No Response");
+            // Note: don't use header("Status: 204"); because it can confuse PHP+FastCGI
+            // http://moodle.org/mod/forum/discuss.php?d=108330
+            die; // script will die here
+        }
+
+        // otherwise, we assume the $response is a URL
+        redirect($response); // script will die here
+    }
+
     /////////////////////////////////////////////////////////////////////
     // utility functions for extracting and cleaning html              //
     /////////////////////////////////////////////////////////////////////
@@ -914,8 +1019,7 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
      */
     function remove_blank_lines($str)  {
         // standardize line endings and remove trailing white space and blank lines
-        $str = preg_replace('/\s+[\r\n]/s', "\n", $str);
-        return $str;
+        return preg_replace('/\s+[\r\n]/s', "\n", $str);
     }
 
     /**
@@ -971,10 +1075,14 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
      * @return xxx
      */
     function fix_css_definitions($match)  {
+        global $CFG;
 
         $container = '#'.$this->themecontainer;
         $css_selector = $match[1];
         $css_definition = $match[2];
+
+        // standardize indent to a single tab
+        $css_definition = preg_replace('/^[\t ]*(?=[^\n\r\t ])/m', "\t", $css_definition);
 
         // additional CSS for list items
         $listitem_css = '';
@@ -983,27 +1091,55 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
         foreach (explode(',', $css_selector) as $selector) {
             if ($selector = trim($selector)) {
                 switch (true) {
+
                     case preg_match('/^html\b/i', $selector):
                         // leave "html" as it is
                         $selectors[] = "$selector";
                         break;
+
                     case preg_match('/^body\b/i', $selector):
-                        // currently we do nothing here, so that
-                        // these styles do not affect the Moodle theme
 
-                        // replace "body" with the container element
-                        //$selectors[] = "$container";
+                        // by default, we do nothing here, so that
+                        // HP styles do not affect the Moodle theme
 
-                        // disable entire css definition
-                        //$css_definition = "\n"
-                        //    ."\t/".str_repeat('*', 20)."\n"."\t".'Hot Potatoes page styles are disabled'."\n"
-                        //    ."\t".str_repeat('*', 21)."\n".$css_definition."\t".str_repeat('*', 20)."/\n"
-                        //;
+                        // if this site is set to enable HP body styles
+                        // we replace "body" with the container element
+
+                        if (empty($CFG->hotpot_bodystyles)) {
+                            $bodystyles = 0;
+                        } else {
+                        	$callback = create_function('$x,$y', 'return ($x | $y);');
+                            $bodystyles = explode(',', $CFG->hotpot_bodystyles);
+                            $bodystyles = array_reduce($bodystyles, $callback, 0);
+                        }
 
                         // remove font, margin, backgroud and color from the css definition
-                        //$search = "/\b(font-[a-z]+|margin-[a-z]+|background-color|color)\b[^;]*;/";
-                        //$css_definition = preg_replace($search, '/* $0 */', $css_definition);
+                        $search = array();
+                        if (! ($bodystyles & hotpot::BODYSTYLES_BACKGROUND)) {
+                            // background-color, background-image
+                            $search[] = '(?:background[a-z-]*)';
+                        }
+                        if (! ($bodystyles & hotpot::BODYSTYLES_COLOR)) {
+                            // color (the text color)
+                            $search[] = '(?:color[a-z-]*)';
+                        }
+                        if (! ($bodystyles & hotpot::BODYSTYLES_FONT)) {
+                            // font-size, font-family
+                            $search[] = '(?:font[a-z-]*)';
+                        }
+                        if (! ($bodystyles & hotpot::BODYSTYLES_MARGIN)) {
+                            // margin-left, margin-right
+                            $search[] = '(?:margin[a-z-]*)';
+                        }
+                        if ($search = implode('|', $search)) {
+                            $search = "/[ \t]+($search)[^;]*;[ \t]*[\n\r]*/";
+                            $css_definition = preg_replace($search, '', $css_definition);
+                        }
+                        if (trim($css_definition)) {
+                            $selectors[] = "$container";
+                        }
                         break;
+
                     default:
                         // we need to do some special processing of CSS for list items
                         // override standard Moodle 2.0 setting of li {list-style-type }
@@ -1013,7 +1149,16 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
                             if (preg_match($search, $css_definition, $matches)) {
                                 $listitem_css .= "\n$container $selector li {\n".$matches[0].";\n}";
                             }
+                        } else {
+                            // we need to override the Moodle theme's background-image of buttons
+                            // because these have hitherto played an important role in HP styles
+                            $count = 0;
+                            $selector = preg_replace('/\.FuncButton/', 'button$0', $selector, -1, $count);
+                            if ($count && strpos($css_definition, 'background-image')===false) {
+                                $css_definition .= "\n\tbackground-image: none;\n";
+                            }
                         }
+
                         // restrict other CSS selectors to affect only the content of the container element
                         $selectors[] = "$container $selector";
                 }
@@ -1033,29 +1178,150 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
      * @param xxx $script_tags (optional, default=false)
      * @return xxx
      */
-    function fix_onload($onload, $script_tags=false)  {
-        static $count = 0;
-        $onload_temp  = 'onload_'.sprintf('%02d', (++$count));
-
-        $onload_oneline = preg_replace('/\s+/s', ' ', $onload);
-        $onload_nospace = str_replace(' ', '', $onload_oneline);
+    function fix_onload($onload, $script_tags=false) {
+        static $attacheventid = 0;
 
         $str = '';
         if ($script_tags) {
             $str .= "\n".'<script type="text/javascript">'."\n"."//<![CDATA[\n";
         }
-        $str .= ''
-            .'if (typeof(window.onload)=="function"){'."\n"
-            .'	var s = onload.toString();'."\n"
-            .'	s = s.replace(new RegExp("\\\\s+", "g"), "");'."\n"
-            .'	if (s.indexOf("'.$onload_nospace.'")<0){'."\n"
-            .'		window.'.$onload_temp.' = onload;'."\n"
-            .'		window.onload = new Function("window.'.$onload_temp.'();"+"'.$onload_oneline.';");'."\n"
-            .'	}'."\n"
-            .'} else {'."\n"
-            .'	window.onload = new Function("'.$onload_oneline.'");'."\n"
-            .'}'."\n"
-        ;
+        if ($attacheventid && $attacheventid==$this->hotpot->id) {
+            // do nothing
+        } else {
+            // only do this once per quiz
+            $attacheventid = $this->hotpot->id;
+
+            if ($this->hotpot->allowpaste) {
+                $allowpaste = 'true';
+            } else {
+                $allowpaste = 'false';
+            }
+            $str .= ''
+                ."function HP_add_listener(obj, evt, fnc, useCapture) {\n"
+                ."	// obj : an HTML element\n"
+                ."	// evt : the name of the event (without leading 'on')\n"
+                ."	// fnc : the name of the event handler funtion\n"
+                ."	// useCapture : boolean (default = false)\n"
+
+                ."	if (typeof(fnc)=='string') {\n"
+                ."		fnc = new Function(fnc);\n"
+                ."	}\n"
+
+                ."	// transfer object's old event handler (if any)\n"
+                ."	var onevent = 'on' + evt;\n"
+                ."	if (obj[onevent]) {\n"
+                ."		var old_fnc = obj[onevent];\n"
+                ."		obj[onevent] = null;\n"
+                ."		HP_add_listener(obj, evt, old_fnc, useCapture);\n"
+                ."	}\n"
+
+                ."	if (obj.addEventListener) {\n"
+                ."		obj.addEventListener(evt, fnc, (useCapture ? true : false));\n"
+                ."	} else if (obj.attachEvent) {\n"
+                ."		obj.attachEvent(onevent, fnc);\n"
+                ."	} else {\n" // old browser NS4, IE5 ...
+                ."		if (! obj.evts) {\n"
+                ."			obj.evts = new Array();\n"
+                ."		}\n"
+                ."		if (obj.evts && ! obj.evts[onevent]) {\n"
+                ."			obj.evts[onevent] = new Array();\n"
+                ."		}\n"
+                ."		if (obj.evts && obj.evts[onevent] && ! obj.evts[onevent]) {\n"
+                ."			obj.evts[onevent][obj.evts[onevent].length] = fnc;\n"
+                ."			obj[onevent] = new Function('HP_handle_event(this, \"'+onevent+'\")');\n"
+                ."		}\n"
+                ."	}\n"
+                ."}\n"
+
+                ."function HP_remove_listener(obj, evt, fnc, useCapture) {\n"
+                ."	// obj : an HTML element\n"
+                ."	// evt : the name of the event (without leading 'on')\n"
+                ."	// fnc : the name of the event handler funtion\n"
+                ."	// useCapture : boolean (default = false)\n"
+
+                ."	var onevent = 'on' + evt;\n"
+                ."	if (obj.removeEventListener) {\n"
+                ."		obj.removeEventListener(evt, fnc, (useCapture ? true : false));\n"
+                ."	} else if (obj.attachEvent) {\n"
+                ."		obj.detachEvent(onevent, fnc);\n"
+                ."	} else if (obj.evts && obj.evts[onevent]) {\n"
+                ."		var i_max = obj.evts[onevent].length;\n"
+                ."		for (var i=(i_max - 1); i>=0; i--) {\n"
+                ."			if (obj.evts[onevent][i]==fnc) {\n"
+                ."				obj.evts[onevent].splice(i, 1);\n"
+                ."			}\n"
+                ."		}\n"
+                ."	}\n"
+                ."}\n"
+
+                ."function HP_handle_event(obj, onevent) {\n"
+                ."	if (obj.evts[onevent]) {\n"
+                ."		var i_max = obj.evts[onevent].length\n"
+                ."		for (var i=0; i<i_max; i++) {\n"
+                ."			obj.evts[onevent][i]();\n"
+                ."		}\n"
+                ."	}\n"
+                ."}\n"
+
+                ."function HP_disable_event(evt) {\n"
+                ."	if (evt==null) {\n"
+                ."		evt = window.event;\n"
+                ."	}\n"
+                ."	if (evt.preventDefault) {\n"
+                ."		evt.preventDefault();\n"
+                ."	} else {\n" // IE <= 8
+                ."		evt.returnValue = false;\n"
+                ."	}\n"
+                ."	return false;\n"
+                ."}\n"
+
+                // By default, pasting of answers is NOT allowed.
+                // To allow it: window.allow_paste_input = true;
+                ."function HP_setup_input_and_textarea() {\n"
+                ."	if (window.allow_paste_input || window.enable_paste_input || $allowpaste) {\n"
+                ."		var disablepaste = false;\n"
+                ."	} else {\n"
+                ."		var disablepaste = true;\n"
+                ."	}\n"
+                ."	var obj = document.getElementsByTagName('input');\n"
+                ."	if (obj) {\n"
+                ."		var i_max = obj.length;\n"
+                ."		for (var i=0; i<i_max; i++) {\n"
+                ."			if (obj[i].type=='text') {\n"
+                ."				if (disablepaste) {\n"
+                ."					HP_add_listener(obj[i], 'drop', HP_disable_event);\n"
+                ."					HP_add_listener(obj[i], 'paste', HP_disable_event);\n"
+                ."				}\n"
+                ."				HP_add_listener(obj[i], 'focus', HP_send_results);\n" // keydown, mousedown ?
+                ."			}\n"
+                ."		}\n"
+                ."	}\n"
+                ."	var obj = document.getElementsByTagName('textarea');\n"
+                ."	if (obj) {\n"
+                ."		var i_max = obj.length;\n"
+                ."		for (var i=0; i<i_max; i++) {\n"
+                ."			if (disablepaste) {\n"
+                ."				HP_add_listener(obj[i], 'drop', HP_disable_event);\n"
+                ."				HP_add_listener(obj[i], 'paste', HP_disable_event);\n"
+                ."			}\n"
+                ."			HP_add_listener(obj[i], 'focus', HP_send_results);\n"
+                ."		}\n"
+                ."	}\n"
+                ."	obj = null;\n"
+                ."}\n"
+
+                ."HP_add_listener(window, 'load', HP_setup_input_and_textarea);\n"
+
+                // ensure keydown (not keypress) event handler is assigned
+                // to prevent leaving page when user hits delete key
+                ."if (window.SuppressBackspace) {\n"
+                ."	HP_add_listener(window, 'keydown', SuppressBackspace);\n"
+                ."}\n"
+            ;
+        }
+        $onload_oneline = preg_replace('/\s+/s', ' ', $onload);
+        $onload_oneline = preg_replace("/[\\']/", '\\\\$0', $onload_oneline);
+        $str .= "HP_add_listener(window, 'load', '$onload_oneline');\n";
         if ($script_tags) {
             $str .= "//]]>\n"."</script>\n";
         }
@@ -1141,7 +1407,7 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
             $functions = '';
             if (preg_match_all('/(?<=function )\w+/', $mediafilter->js_inline, $names)) {
                 foreach ($names[0] as $name) {
-                    list($start, $finish) = $this->locate_js_function($name, $mediafilter->js_inline, true);
+                    list($start, $finish) = $this->locate_js_block('function', $name, $mediafilter->js_inline, true);
                     if ($finish) {
                         $functions .= trim(substr($mediafilter->js_inline, $start, ($finish - $start)))."\n";
                         $mediafilter->js_inline = substr_replace($mediafilter->js_inline, '', $start, ($finish - $start));
@@ -1198,38 +1464,38 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
         $tagclose = '(?(2)>|(?(3)\\\\u003E|(?(4)&gt;|(?(5)&amp;#x003E;))))'; //  right angle bracket (to match left angle bracket)
 
         $space = '\s+'; // at least one space
+        $equals = '\s*=\s*'; // equals sign (+ white space)
         $anychar = '(?:[^>]*?)'; // any character
 
-        $quoteopen = '("|\\\\"|&quot;|&amp;quot;'."|'|\\\\'|&apos;|&amp;apos;".')'; // open quote
-        $quoteclose = '\\6'; //  close quote (to match open quote)
+        $quoteopen  = '("|\\\\"|&quot;|&amp;quot;'."|'|\\\\'|&apos;|&amp;apos;".')'; // open quote
+        $quoteclose = '\\6'; // close quote (to match open quote)
+        $url        = '.*?'; // chars between quotes (non-greedy)
 
         // define which attributes of which HTML tags to search for URLs
         $tags = array(
             // tag  =>  attribute containing url
-            'script' => 'src',
-            'source' => 'src', // HTML5
-            'link'   => 'href',
             'a'      => 'href',
             'area'   => 'href', // <area href="sun.htm" ... shape="..." coords="..." />
-            'img'    => 'src',
-            'param'  => 'value',
-            'object' => 'data',
             'embed'  => 'src',
+            'iframe' => 'src',
+            'img'    => 'src',
             'input'  => 'src', // <input type="image" src="..." >
-            '[a-z]+' => 'style',
-            '(?:table|th|td)' => 'background'
+            'link'   => 'href',
+            'object' => 'data',
+            'param'  => 'value',
+            'script' => 'src',
+            'source' => 'src', // HTML5
+            '(?:table|th|td)' => 'background',
+            '[a-z]+' => 'style'
         );
 
         // replace relative URLs in attributes of certain HTML tags
         foreach ($tags as $tag=>$attribute) {
-            if ($tag=='param') {
-                $url = '[^ =]+?\.[^ ]+?'; // must include a filename and have no spaces
-            } else {
-                $url = '.*?';
-            }
-            $search = "/($tagopen$tag$space$anychar$attribute=$quoteopen)($url)($quoteclose$anychar$tagclose)/is";
+            $search = "/($tagopen$tag$space$anychar$attribute$equals$quoteopen)($url)($quoteclose$anychar$tagclose)/is";
             if ($attribute=='style') {
                 $callback = array($this, 'convert_urls_css');
+            } else if ($tag=='param') {
+                $callback = array($this, 'convert_url_param');
             } else {
                 $callback = array($this, 'convert_url_relative');
             }
@@ -1252,7 +1518,7 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
         $this->bodycontent = preg_replace_callback($search, $callback, $this->bodycontent);
 
         // replace relative URLs in <a ... onclick="window.open('...')...">...</a>
-        $search = '/'.'('.'onclick="'."window.open\('".')'."([^']*)".'('."'\);return false;".'")'.'/is';
+        $search = '/'.'('.'onclick="'."window.open\('".')'."([^']*)".'('."'[^\)]*\);return false;".'")'.'/is';
         $callback = array($this, 'convert_url');
         $this->bodycontent = preg_replace_callback($search, $callback, $this->bodycontent);
     }
@@ -1271,6 +1537,23 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
         $search = '/(url\(['."'".'"]?)(.+?)(['."'".'"]?\))/is';
         $callback = array($this, 'convert_url');
         return $before.preg_replace_callback($search, $callback, $css).$after;
+    }
+
+    /**
+     * convert_url_param
+     *
+     * @param xxx $match
+     * @return xxx
+     */
+    function convert_url_param($match)  {
+        // make sure the param "name" attribute is one we know about
+        $quote = $match[6];
+        $search = "/name\s*=\s*$quote(?:data|movie|src|FlashVars)$quote/i";
+        if (preg_match($search, $match[0])) {
+            return $this->convert_url_relative($match);
+        } else {
+            return $match[0];
+        }
     }
 
     /**
@@ -1322,7 +1605,7 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
 
         // convert urls, if any, in the query string
         if ($query) {
-            $search = '/'.'((?:file|src|thesound|mp3)=)([^&]+)(&|$)/is';
+            $search = '/'.'((?:file|song_url|src|thesound|mp3)=)([^&]+)(&|$)/is';
             $callback = array($this, 'convert_url');
             $query = preg_replace_callback($search, $callback, $query);
         }
@@ -1402,13 +1685,15 @@ class mod_hotpot_attempt_renderer extends mod_hotpot_renderer {
                 $url = $matches[2];
             }
             // add subdirectory, $dir, to $baseurl, if necessary
-            if ($dir && $dir!='.') {
-                $baseurl .= '/'.ltrim($dir, '/');
+            if ($dir=='' || $dir=='/' || $dir=='.' || $dir=='..') {
+                // do nothing
+            } else {
+                $baseurl .= '/'.trim($dir, '/');
             }
             // prefix $url with $baseurl
             $url = "$baseurl/$url";
         }
 
         return $before.$url.$after;
-    } // end function : convert_url
+    }
 }

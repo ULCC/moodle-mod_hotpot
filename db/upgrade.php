@@ -90,11 +90,9 @@ function xmldb_hotpot_upgrade($oldversion) {
             'gradeweighting' => new xmldb_field('grade', XMLDB_TYPE_INTEGER, '10', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, '0', 'attemptlimit'),
         );
 
-        // fix previous fields (remove them if they don't exist)
-        xmldb_hotpot_fix_previous_field($dbman, $table, $fields);
-
         foreach ($fields as $newname => $field) {
             if ($dbman->field_exists($table, $field)) {
+                xmldb_hotpot_fix_previous_field($dbman, $table, $field);
                 $dbman->change_field_type($table, $field);
                 if ($field->getName() != $newname) {
                     $dbman->rename_field($table, $field, $newname);
@@ -140,11 +138,9 @@ function xmldb_hotpot_upgrade($oldversion) {
             new xmldb_field('discarddetails', XMLDB_TYPE_INTEGER, '2', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, '0', 'clickreporting')
         );
 
-        // fix previous fields (remove them if they don't exist)
-        xmldb_hotpot_fix_previous_field($dbman, $table, $fields);
-
         foreach ($fields as $field) {
             if (! $dbman->field_exists($table, $field)) {
+                xmldb_hotpot_fix_previous_field($dbman, $table, $field);
                 $dbman->add_field($table, $field);
             }
         }
@@ -159,7 +155,7 @@ function xmldb_hotpot_upgrade($oldversion) {
         // remove field: shownextquiz (replaced by "exitcm")
         $field = new xmldb_field('shownextquiz', XMLDB_TYPE_INTEGER, '4', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, '0');
         if ($dbman->field_exists($table, $field)) {
-            // set exitcm to show next HotPot: -4 = hotpot::ACTIVITY_SECTION_QUIZPORT
+            // set exitcm to show next HotPot: -4 = hotpot::ACTIVITY_SECTION_HOTPOT
             $DB->execute('UPDATE {hotpot} SET exitcm=-4 WHERE shownextquiz=1');
             $dbman->drop_field($table, $field);
         }
@@ -285,11 +281,9 @@ function xmldb_hotpot_upgrade($oldversion) {
             new xmldb_field('grademethod', XMLDB_TYPE_INTEGER, '4', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, '0')
         );
 
-        // fix previous fields (remove them if they don't exist)
-        xmldb_hotpot_fix_previous_field($dbman, $table, $fields);
-
         foreach ($fields as $field) {
             if ($dbman->field_exists($table, $field)) {
+                xmldb_hotpot_fix_previous_field($dbman, $table, $field);
                 $dbman->change_field_type($table, $field);
             }
         }
@@ -329,10 +323,8 @@ function xmldb_hotpot_upgrade($oldversion) {
         foreach ($tables as $tablename => $fields) {
             $table = new xmldb_table($tablename);
 
-            // fix previous fields (remove them if they don't exist)
-            xmldb_hotpot_fix_previous_field($dbman, $table, $fields);
-
             foreach ($fields as $field) {
+                xmldb_hotpot_fix_previous_field($dbman, $table, $field);
                 if ($dbman->field_exists($table, $field)) {
                     $dbman->change_field_type($table, $field);
                 } else {
@@ -418,14 +410,12 @@ function xmldb_hotpot_upgrade($oldversion) {
         $params = array('hotpot', '', '/%', 0);
         $orderby = 'h.course, h.id';
 
-        // get HotPot records to update
+        // get HotPot records that need to be updated
         if ($count = $DB->count_records_sql("SELECT COUNT('x') FROM $from WHERE $where", $params)) {
             $rs = $DB->get_recordset_sql("SELECT $select FROM $from WHERE $where ORDER BY $orderby", $params);
         } else {
             $rs = false;
         }
-
-        // loop through HotPot records that need to be updated
         if ($rs) {
             $i = 0;
             $bar = new progress_bar('hotpotmigratefiles', 500, true);
@@ -433,25 +423,35 @@ function xmldb_hotpot_upgrade($oldversion) {
             // get file storage object
             $fs = get_file_storage();
 
+            if (class_exists('context_course')) {
+                $sitecontext = context_course::instance(SITEID);
+            } else {
+                $sitecontext = get_context_instance(CONTEXT_COURSE, SITEID);
+            }
+
             $coursecontext = null;
+            $modulecontext = null;
             foreach ($rs as $hotpot) {
 
                 // apply for more script execution time (3 mins)
                 upgrade_set_timeout();
 
-                // set $courseid from $hotpot->sourcelocation
-                //   0 : HOTPOT_LOCATION_COURSEFILES
-                //   1 : HOTPOT_LOCATION_SITEFILES
-                //   2 : HOTPOT_LOCATION_WWW (not used)
-                if ($hotpot->sourcelocation) {
-                    $courseid = SITEID;
-                } else {
-                    $courseid = $hotpot->course;
+                // get course context for this $hotpot
+                if ($coursecontext===null || $coursecontext->instanceid != $hotpot->course) {
+                    if (class_exists('context_course')) {
+                        $coursecontext = context_course::instance($hotpot->course);
+                    } else {
+                        $coursecontext = get_context_instance(CONTEXT_COURSE, $hotpot->course);
+                    }
                 }
 
-                // get course context (only if we need to)
-                if (is_null($coursecontext) || $coursecontext->instanceid != $courseid) {
-                    $coursecontext  = get_context_instance(CONTEXT_COURSE, $courseid);
+                // get module context for this $hotpot/$task
+                if ($modulecontext===null || $modulecontext->instanceid != $hotpot->cmid) {
+                    if (class_exists('context_module')) {
+                        $modulecontext = context_module::instance($hotpot->cmid);
+                    } else {
+                        $modulecontext = get_context_instance(CONTEXT_MODULE, $hotpot->cmid);
+                    }
                 }
 
                 // actually there shouldn't be any urls in HotPot activities,
@@ -467,39 +467,59 @@ function xmldb_hotpot_upgrade($oldversion) {
 
                 // this information should be enough to access the file
                 // if it has been migrated into Moodle 2.0 file system
-                $filename = basename($path);
-                $filepath = dirname($path);
-                if ($filepath=='.' || $filepath=='') {
-                    $filepath = '/';
+                $old_filename = basename($path);
+                $old_filepath = dirname($path);
+                if ($old_filepath=='.' || $old_filepath=='') {
+                    $old_filepath = '/';
                 } else {
-                    $filepath = '/'.ltrim($filepath, '/'); // require leading slash
-                    $filepath = rtrim($filepath, '/').'/'; // require trailing slash
+                    $old_filepath = '/'.ltrim($old_filepath, '/'); // require leading slash
+                    $old_filepath = rtrim($old_filepath, '/').'/'; // require trailing slash
                 }
-                $filehash = sha1('/'.$coursecontext->id.'/course/legacy/0'.$filepath.$filename);
 
-                // we might need the old file path, if the file has not been migrated
-                $oldfilepath = $CFG->dataroot.'/'.$courseid.$filepath.$filename;
+                // update $hotpot->sourcefile, if necessary
+                if ($hotpot->sourcefile != $old_filepath.$old_filename) {
+                    $hotpot->sourcefile = $old_filepath.$old_filename;
+                    $DB->set_field('hotpot', 'sourcefile', $hotpot->sourcefile, array('id' => $hotpot->id));
+                }
+
+                // set $courseid and $contextid from $task->$location
+                // of where we expect to find the $file
+                //   0 : HOTPOT_LOCATION_COURSEFILES
+                //   1 : HOTPOT_LOCATION_SITEFILES
+                //   2 : HOTPOT_LOCATION_WWW (not used)
+                if ($hotpot->sourcelocation) {
+                    $courseid = SITEID;
+                    $contextid = $sitecontext->id;
+                } else {
+                    $courseid = $hotpot->course;
+                    $contextid = $coursecontext->id;
+                }
+
+                // we expect to need the $filehash to get a file that has been migrated
+                $filehash = sha1('/'.$contextid.'/course/legacy/0'.$old_filepath.$old_filename);
+
+                // we might also need the old file path, if the file has not been migrated
+                $oldfilepath = $CFG->dataroot.'/'.$courseid.$old_filepath.$old_filename;
 
                 // set parameters used to add file to filearea
                 // (sortorder=1 siginifies the "mainfile" in this filearea)
-                $context  = get_context_instance(CONTEXT_MODULE, $hotpot->cmid);
                 $file_record = array(
-                    'contextid'=>$context->id, 'component'=>'mod_hotpot', 'filearea'=>'sourcefile',
-                    'sortorder'=>1, 'itemid'=>0, 'filepath'=>$filepath, 'filename'=>$filename
+                    'contextid'=>$modulecontext->id, 'component'=>'mod_hotpot', 'filearea'=>'sourcefile',
+                    'sortorder'=>1, 'itemid'=>0, 'filepath'=>$old_filepath, 'filename'=>$old_filename
                 );
 
                 // initialize sourcefile settings
-                $hotpot->sourcefile = $filepath.$filename;
+                $hotpot->sourcefile = $old_filepath.$old_filename;
                 $hotpot->sourcetype = '';
                 $hotpot->sourceitemid = 0;
 
-                if ($file = $fs->get_file($context->id, 'mod_hotpot', 'sourcefile', 0, $filepath, $filename)) {
+                if ($file = $fs->get_file($modulecontext->id, 'mod_hotpot', 'sourcefile', 0, $old_filepath, $old_filename)) {
                     // file already exists for this context - shouldn't happen !!
                     // maybe an earlier upgrade failed for some reason ?
                     // anyway we must do this check, so that create_file_from_xxx() does not abort
                 } else if ($url) {
                     // file is on an external url - unusual ?!
-                    $file = $fs->create_file_from_url($file_record, $url);
+                    $file = false; // $fs->create_file_from_url($file_record, $url);
                 } else if ($file = $fs->get_file_by_hash($filehash)) {
                     // $file has already been migrated to Moodle's file system
                     // this is the route we expect most people to come :-)
@@ -519,7 +539,8 @@ function xmldb_hotpot_upgrade($oldversion) {
                     } else {
                         $msg = "course_modules.id=$hotpot->cmid, path=$path";
                     }
-                    $msg = html_writer::link(new moodle_url('/course/modedit.php', array('update'=>$hotpot->cmid)), $msg);
+                    $params = array('update'=>$hotpot->cmid, 'onclick'=>'this.target="_blank"');
+                    $msg = html_writer::link(new moodle_url('/course/modedit.php', $params), $msg);
                     $msg = get_string('sourcefilenotfound', 'hotpot', $msg);
                     echo html_writer::tag('div', $msg, array('class'=>'notifyproblem'));
                 }
@@ -539,7 +560,7 @@ function xmldb_hotpot_upgrade($oldversion) {
                         case 'html':
                         default:
                             if ($file) {
-                                $pathnamehash = $fs->get_pathname_hash($context->id, 'mod_hotpot', 'sourcefile', 0, $filepath, $filename);
+                                $pathnamehash = $fs->get_pathname_hash($modulecontext->id, 'mod_hotpot', 'sourcefile', 0, $old_filepath, $old_filename);
                                 if ($contenthash = $DB->get_field('files', 'contenthash', array('pathnamehash'=>$pathnamehash))) {
                                     $l1 = $contenthash[0].$contenthash[1];
                                     $l2 = $contenthash[2].$contenthash[3];
@@ -615,12 +636,6 @@ function xmldb_hotpot_upgrade($oldversion) {
         upgrade_mod_savepoint(true, "$newversion", 'hotpot');
     }
 
-    $newversion = 2010080319;
-    if ($oldversion < $newversion) {
-        update_capabilities('mod/hotpot');
-        upgrade_mod_savepoint(true, "$newversion", 'hotpot');
-    }
-
     $newversion = 2010080325;
     if ($oldversion < $newversion) {
         $table = new xmldb_table('hotpot');
@@ -634,26 +649,195 @@ function xmldb_hotpot_upgrade($oldversion) {
         upgrade_mod_savepoint(true, "$newversion", 'hotpot');
     }
 
-    $newversion = 2010080327;
+    $newversion = 2010080330;
+    if ($oldversion < $newversion) {
+        require_once($CFG->dirroot.'/mod/hotpot/lib.php');
+        hotpot_refresh_events();
+    }
+
+    $newversion = 2010080333;
+    if ($oldversion < $newversion) {
+        update_capabilities('mod/hotpot');
+        upgrade_mod_savepoint(true, "$newversion", 'hotpot');
+    }
+
+    $newversion = 2010080339;
     if ($oldversion < $newversion) {
         $table = new xmldb_table('hotpot');
         $field = new xmldb_field('exitgrade', XMLDB_TYPE_INTEGER, '6', XMLDB_UNSIGNED, XMLDB_NOTNULL, null, '0', 'exitcm');
+        xmldb_hotpot_fix_previous_field($dbman, $table, $field);
         if (! $dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
         upgrade_mod_savepoint(true, "$newversion", 'hotpot');
     }
 
-    $newversion = 2010080329;
+    $newversion = 2010080340;
     if ($oldversion < $newversion) {
-        $empty_cache = true;
+
+        // force all text fields to be long text, the default for Moodle 2.3 and later
+        $tables = array(
+            'hotpot' => array(
+                new xmldb_field('entrytext', XMLDB_TYPE_TEXT, 'long', null, XMLDB_NOTNULL),
+                new xmldb_field('exittext', XMLDB_TYPE_TEXT, 'long', null, XMLDB_NOTNULL)
+            ),
+            'hotpot_cache' => array(
+                new xmldb_field('content', XMLDB_TYPE_TEXT, 'long', null, XMLDB_NOTNULL)
+            ),
+            'hotpot_details' => array(
+                new xmldb_field('details', XMLDB_TYPE_TEXT, 'long', null, XMLDB_NOTNULL)
+            ),
+            'hotpot_questions' => array(
+                new xmldb_field('name', XMLDB_TYPE_TEXT, 'long', null, XMLDB_NOTNULL)
+            ),
+            'hotpot_strings' => array(
+                new xmldb_field('string', XMLDB_TYPE_TEXT, 'long', null, XMLDB_NOTNULL)
+            )
+        );
+
+        foreach ($tables as $tablename => $fields) {
+            $table = new xmldb_table($tablename);
+            foreach ($fields as $field) {
+                if ($dbman->field_exists($table, $field)) {
+                    $fieldname = $field->getName();
+                    $DB->set_field_select($tablename, $fieldname, '', "$fieldname IS NULL");
+                    $dbman->change_field_type($table, $field);
+                }
+            }
+        }
         upgrade_mod_savepoint(true, "$newversion", 'hotpot');
     }
 
-    $newversion = 2010080330;
+    $newversion = 2010080342;
+    if ($oldversion < $newversion) {
+        // force all MySQL integer fields to be signed, the default for Moodle 2.3 and later
+        if ($DB->get_dbfamily() == 'mysql') {
+            $prefix = $DB->get_prefix();
+            $tables = $DB->get_tables();
+            foreach ($tables as $table) {
+                if (substr($table, 0, 6)=='hotpot') {
+                    $rs = $DB->get_recordset_sql("SHOW COLUMNS FROM {$CFG->prefix}$table WHERE type LIKE '%unsigned%'");
+                    foreach ($rs as $column) {
+                        // copied from as "lib/db/upgradelib.php"
+                        $type = preg_replace('/\s*unsigned/i', 'signed', $column->type);
+                        $notnull = ($column->null === 'NO') ? 'NOT NULL' : 'NULL';
+                        $default = (is_null($column->default) || $column->default === '') ? '' : "DEFAULT '$column->default'";
+                        $autoinc = (stripos($column->extra, 'auto_increment') === false)  ? '' : 'AUTO_INCREMENT';
+                        $sql = "ALTER TABLE `{$prefix}$table` MODIFY COLUMN `$column->field` $type $notnull $default $autoinc";
+                        $DB->change_database_structure($sql);
+                    }
+                }
+            }
+        }
+        upgrade_mod_savepoint(true, "$newversion", 'hotpot');
+    }
+
+    $newversion = 2010080353;
+    if ($oldversion < $newversion) {
+
+        // remove any unwanted "course_files" folders that may have been created
+        // when restoring Moodle 1.9 HotPot activities to a Moodle 2.x site
+
+        // select all HotPot activities which have a "course_files" folder
+        // but whose "sourcefile" path does not require such a folder
+
+        $select = 'f.*,'.
+                  'h.id AS hotpotid,'.
+                  'h.sourcefile AS sourcefile';
+
+        $from   = '{hotpot} h,'.
+                  '{course_modules} cm,'.
+                  '{context} c,'.
+                  '{files} f';
+
+        $where  = $DB->sql_like('h.sourcefile', '?', false, false, true). // NOT LIKE
+                  ' AND h.id=cm.instance'.
+                  ' AND cm.id=c.instanceid'.
+                  ' AND c.id=f.contextid'.
+                  ' AND f.component=?'.
+                  ' AND f.filearea=?'.
+                  ' AND f.filepath=?'.
+                  ' AND f.filename=?';
+
+        $params = array('/course_files/%', 'mod_hotpot', 'sourcefile', '/course_files/', '.');
+        if ($filerecords = $DB->get_records_sql("SELECT $select FROM $from WHERE $where", $params)) {
+
+            $fs = get_file_storage();
+            foreach ($filerecords as $filerecord) {
+                $file = $fs->get_file_instance($filerecord);
+                xmldb_hotpot_move_file($file, '/');
+            }
+        }
+
+        upgrade_mod_savepoint(true, "$newversion", 'hotpot');
+    }
+
+    $newversion = 2010080366;
+    if ($oldversion < $newversion) {
+        if ($hotpots = $DB->get_records_select('hotpot', $DB->sql_like('sourcefile', '?'), array('%http://localhost/19/99/%'))) {
+            foreach ($hotpots as $hotpot) {
+                $sourcefile = str_replace('http://localhost/19/99/', '', $hotpot->sourcefile);
+                $DB->set_field('hotpot', 'sourcefile', $sourcefile, array('id' => $hotpot->id));
+            }
+        }
+        upgrade_mod_savepoint(true, "$newversion", 'hotpot');
+    }
+
+    $newversion = 2010080370;
+    if ($oldversion < $newversion) {
+        require_once($CFG->dirroot.'/mod/hotpot/locallib.php');
+
+        $reviewoptions = 0;
+        list($times, $items) = hotpot::reviewoptions_times_items();
+        foreach ($times as $timename => $timevalue) {
+            foreach ($items as $itemname => $itemvalue) {
+                $reviewoptions += ($timevalue & $itemvalue);
+            }
+        }
+        // $reviewoptions should now be set to 62415
+        $DB->set_field('hotpot', 'reviewoptions', $reviewoptions);
+
+        upgrade_mod_savepoint(true, "$newversion", 'hotpot');
+    }
+
+    $newversion = 2013111685;
+    if ($oldversion < $newversion) {
+        $tables = array(
+            'hotpot' => array(
+                new xmldb_field('allowpaste', XMLDB_TYPE_INTEGER, '2', null, XMLDB_NOTNULL, null, '0', 'stoptext')
+            ),
+            'hotpot_cache' => array(
+                new xmldb_field('hotpot_bodystyles',  XMLDB_TYPE_CHAR,    '8',  null, XMLDB_NOTNULL, null, null, 'slasharguments'),
+                new xmldb_field('sourcerepositoryid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0',  'sourcelocation'),
+                new xmldb_field('configrepositoryid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0',  'configlocation'),
+                new xmldb_field('allowpaste',         XMLDB_TYPE_INTEGER, '2',  null, XMLDB_NOTNULL, null, '0',  'stoptext')
+            ),
+        );
+        foreach ($tables as $table => $fields) {
+            $table = new xmldb_table($table);
+            foreach ($fields as $field) {
+                xmldb_hotpot_fix_previous_field($dbman, $table, $field);
+                if ($dbman->field_exists($table, $field)) {
+                    $dbman->change_field_type($table, $field);
+                } else {
+                    $dbman->add_field($table, $field);
+                }
+            }
+        }
+        upgrade_mod_savepoint(true, "$newversion", 'hotpot');
+    }
+
+    $newversion = 2014011694;
     if ($oldversion < $newversion) {
         require_once($CFG->dirroot.'/mod/hotpot/lib.php');
-        hotpot_refresh_events();
+        hotpot_update_grades();
+        upgrade_mod_savepoint(true, "$newversion", 'hotpot');
+    }
+
+    $newversion = 2014042111;
+    if ($oldversion < $newversion) {
+        $empty_cache = true;
+        upgrade_mod_savepoint(true, "$newversion", 'hotpot');
     }
 
     if ($empty_cache) {
@@ -664,22 +848,76 @@ function xmldb_hotpot_upgrade($oldversion) {
 }
 
 /**
+ * xmldb_hotpot_move_file
+ *
+ * move a file or folder (within the same context)
+ * if $file is a directory, then all subfolders and files will also be moved
+ * if the destination file/folder already exists, then $file will be deleted
+ *
+ * @param stored_file $file
+ * @param string $new_filepath
+ * @param string $new_filename (optional, default='')
+ * @return void, but may update filearea
+ */
+function xmldb_hotpot_move_file($file, $new_filepath, $new_filename='') {
+
+    $fs = get_file_storage();
+
+    $contextid = $file->get_contextid();
+    $component = $file->get_component();
+    $filearea  = $file->get_filearea();
+    $itemid    = $file->get_itemid();
+
+    $old_filepath = $file->get_filepath();
+    $old_filename = $file->get_filename();
+
+    if ($file->is_directory()) {
+        $children = $fs->get_directory_files($contextid, $component, $filearea, $itemid, $old_filepath);
+        $old_filepath = '/^'.preg_quote($old_filepath, '/').'/';
+        foreach ($children as $child) {
+            xmldb_hotpot_move_file($child, preg_replace($old_filepath, $new_filepath, $child->get_filepath(), 1));
+        }
+    }
+
+    if ($new_filename=='') {
+        $new_filename = $old_filename;
+    }
+
+    if ($fs->file_exists($contextid, $component, $filearea, $itemid, $new_filepath, $new_filename)) {
+        $file->delete(); // new file already exists
+    } else {
+        $file->rename($new_filepath, $new_filename);
+    }
+}
+
+/**
+ * xmldb_hotpot_fix_previous_fields
+ *
+ * @param xxx $dbman
+ * @param xmldb_table $table
+ * @param array of xmldb_field $fields (passed by reference)
+ * @return void, but may update some items in $fields array
+ */
+function xmldb_hotpot_fix_previous_fields($dbman, $table, &$fields) {
+    foreach ($fields as $i => $field) {
+        xmldb_hotpot_fix_previous_field($dbman, $table, $fields[$i]);
+    }
+}
+
+/**
  * xmldb_hotpot_fix_previous_field
  *
  * @param xxx $dbman
- * @param xxx $table
- * @param xxx $fields (passed by reference)
- * @return xxx
+ * @param xmldb_table $table
+ * @param xmldb_field $field (passed by reference)
+ * @return void, but may update $field->previous
  */
-function xmldb_hotpot_fix_previous_field($dbman, $table, &$fields) {
-    foreach ($fields as $i => $field) {
-        if (empty($field->previous)) {
-            continue; // no previous field
-        }
-        if ($dbman->field_exists($table, $field->previous)) {
-            continue; // previous field exists
-        }
-        // previous field does not exist, so remove it
-        $fields[$i]->previous = null;
+function xmldb_hotpot_fix_previous_field($dbman, $table, &$field) {
+    $previous = $field->getPrevious();
+    if (empty($previous) || $dbman->field_exists($table, $previous)) {
+        // $previous field exists - do nothing
+    } else {
+        // $previous field does not exist, so remove it
+        $field->setPrevious(null);
     }
 }

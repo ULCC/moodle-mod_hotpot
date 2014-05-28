@@ -2,6 +2,18 @@
 // essential strings
 $string['modulename'] = 'HotPot';
 $string['modulenameplural'] = 'HotPots';
+$string['modulename_help'] = 'The HotPot module allows teachers to distribute interactive learning materials to their students via Moodle and view reports on the students\' responses and results. .
+
+A single HotPot activity consists of an optional entry page, a single elearning exercise, and an optional exit page. The elearning exercise may be a static web page or an interactive web page which offers students text, audio and visual prompts and records their responses. The elearning exercise is created on the teacher\'s computer using authoring software and then uploaded to Moodle.
+
+A HotPot activity can handle exercises created with the following authoring software:
+
+* Hot Potatoes (version 6)
+* Qedoc
+* Xerte
+* iSpring
+* any HTML editor';
+$string['modulename_link'] = 'mod/hotpot/view';
 $string['pluginadministration'] = 'HotPot administration';
 $string['pluginname'] = 'HotPot module';
 
@@ -14,6 +26,7 @@ $string['subplugintype_hotpotsource'] = 'Source file';
 $string['subplugintype_hotpotsource_plural'] = 'Source files';
 
 // roles strings
+$string['hotpot:addinstance'] = 'Add a new HotPot activity';
 $string['hotpot:attempt'] = 'Attempt a HotPot activity and submit results';
 $string['hotpot:deleteallattempts'] = 'Delete any user\'s attempts at a HotPot activity';
 $string['hotpot:deletemyattempts'] = 'Delete your own attempts at a HotPot activity';
@@ -26,6 +39,7 @@ $string['hotpot:view'] = 'View the entry page of a HotPot activity';
 
 // more strings
 $string['abandoned'] = 'Abandoned';
+$string['abandonhotpot'] = 'Your results so far will be saved but you cannot resume or restart this activity later.';
 $string['activitycloses'] = 'Activity closes';
 $string['activitygrade'] = 'Activity grade';
 $string['activityopens'] = 'Activity opens';
@@ -42,6 +56,8 @@ $string['addquizchain_help'] = 'Should all the quizzes in a quiz chain be added?
 If the source file is a **folder**, all recognizable quizzes in the folder will be added to the course to form a chain of quizzes with identical settings.
 
 If the source file is a **unit file**, such as a Hot Potatoes masher file or index.html, quizzes listed in the unit file will be added to the course as a chain of quizzes with identical settings.';
+$string['allowpaste'] = 'Allow paste';
+$string['allowpaste_help'] = 'If this setting is enabled, students will be allowed to copy, paste and drag text into text input boxes.';
 $string['allowreview'] = 'Allow review';
 $string['allowreview_help'] = 'If enabled, students may review their quiz attempts after the quiz is closed.';
 $string['analysisreport'] = 'Item Analysis';
@@ -53,10 +69,14 @@ $string['attemptscore'] = 'Attempt score';
 $string['attemptsunlimited'] = 'Unlimited attempts';
 $string['average'] = 'Average';
 $string['averagescore'] = 'Average score';
+$string['bodystyles'] = 'Body styles';
+$string['bodystylesbackground'] = 'Background color and image';
+$string['bodystylescolor'] = 'Text color';
+$string['bodystylesfont'] = 'Font size and family';
+$string['bodystylesmargin'] = 'Left and right margin';
 $string['cacherecords'] = 'HotPot cache records';
-$string['canrestartquiz'] = 'Your results so far will be saved and you can redo "{$a}" later';
-$string['canrestartunit'] = 'Your results so far will be saved but if you want to redo this activity again later, you will have to start from the beginning.';
-$string['canresumequiz'] = 'Your results so far will be saved and you can resume "{$a}" later.';
+$string['canrestarthotpot'] = 'Your results so far will be saved and you can redo "{$a}" later';
+$string['canresumehotpot'] = 'Your results so far will be saved and you can resume "{$a}" later.';
 $string['checks'] = 'Checks';
 $string['checksomeboxes'] = 'Please check some boxes';
 $string['clearcache'] = 'Clear HotPot cache';
@@ -69,6 +89,7 @@ $string['clicktrailreport'] = 'Click trails';
 $string['closed'] = 'This activity has closed';
 $string['clues'] = 'Clues';
 $string['completed'] = 'Completed';
+$string['configbodystyles'] = 'By default, Moodle theme styles will override HotPot activity styles. However, for any styles selected here, the HotPot activity styles will be given priority over the Moodle theme styles.';
 $string['configenablecache'] = 'Maintaining a cache of HotPot quizzes can dramatically speed up the delivery of quizzes to the students.';
 $string['configenablecron'] = 'Specify the hours in your time zone at which the HotPot cron script may run';
 $string['configenablemymoodle'] = 'This settings controls whether HotPots are listed on the MyMoodle page or not';
@@ -126,7 +147,7 @@ $string['entry_dates'] = 'Dates';
 $string['entry_grading'] = 'Grading';
 $string['entry_title'] = 'Unit name as title';
 $string['entrycm'] = 'Previous activity';
-$string['entrycm_help'] = 'This setting specifies a Moodle activity and a minimum grade for that activity which must be achieved before this Quizport can be attempted.
+$string['entrycm_help'] = 'This setting specifies a Moodle activity and a minimum grade for that activity which must be achieved before this HotPot activity can be attempted.
 
 The teacher can select a specific activity,
 or one of the following general purpose settings:
@@ -229,16 +250,16 @@ $string['exit_whatnext_0'] = 'What would you like to do next?';
 $string['exit_whatnext_1'] = 'Choose your destiny ...';
 $string['exit_whatnext_default'] = 'Please choose one of the following:';
 $string['exitcm'] = 'Next activity';
-$string['exitcm_help'] = 'This setting specifies a Moodle activity to be done after this Quizport is completed.
+$string['exitcm_help'] = 'This setting specifies a Moodle activity to be done after this HotPot activity is completed. The optional grade is the minimum grade for this HotPot activity that is required before the next activity is shown.
 
 The teacher can select a specific activity, or a one of the following general purpose settings:
 
 * Next activity in this course
 * Next activity in this section
-* Next HotPot in this course
-* Next HotPot in this section
+* Next HotPot activity in this course
+* Next HotPot activity in this section
 
-If other exit page options are disabled, the student will go straight to next activity. Otherwise, the student will be shown a link to take them to the next activity when they are ready.';
+If other exit page options are disabled and the student has achieved the required grade on this HotPot activity, the next activity will be shown straight away. Otherwise, the student will be shown a link to the next activity, which they can click when they are ready.';
 $string['exitcmcourse'] = 'Next activity in this course';
 $string['exitcmsection'] = 'Next activity in this course section';
 $string['exitgrade'] = 'Next activity grade';
@@ -376,6 +397,7 @@ $string['outputformat_hp_6_jcross_xml_v6'] = 'JCross (v6) from xml';
 $string['outputformat_hp_6_jmatch_html'] = 'JMatch (v6) from html';
 $string['outputformat_hp_6_jmatch_xml_flashcard'] = 'JMatch (flashcard) from xml';
 $string['outputformat_hp_6_jmatch_xml_jmemori'] = 'JMemori from xml';
+$string['outputformat_hp_6_jmatch_xml_sort'] = 'JMatch Sort from xml';
 $string['outputformat_hp_6_jmatch_xml_v6'] = 'JMatch (v6) from xml';
 $string['outputformat_hp_6_jmatch_xml_v6_plus'] = 'JMatch (v6+) from xml';
 $string['outputformat_hp_6_jmix_html'] = 'JMix (v6) from html';
@@ -408,7 +430,12 @@ $string['removegradeitem_help'] = 'Should the grade item for this activity be re
 
 **Yes**
 : If the maximum grade or the grade weighting for this HotPot is set to zero, then the grade item for this activity will be removed from the Moodle gradebook';
+$string['responses'] = 'Responses';
 $string['responsesreport'] = 'Responses';
+$string['reviewafterattempt'] = 'Allow review after attempt';
+$string['reviewafterclose'] = 'Allow review after HotPot closes';
+$string['reviewduringattempt'] = 'Allow review during attempt';
+$string['reviewoptions'] = 'Review options';
 $string['score'] = 'Score';
 $string['scoresreport'] = 'Scores';
 $string['selectattempts'] = 'Select attempts';
@@ -494,7 +521,9 @@ $string['title_help'] = 'This setting specifies the title to be displayed on the
 **Use source file path**
 : the source file path, including any folder names, will be used as the web page title.';
 $string['unitname_help'] = 'help text for unit name';
+$string['unrecognizedsourcefile'] = 'Sorry, the HotPot module could not detect the type of the source file: {$a}';
 $string['updated'] = 'Updated';
+$string['updatinggrades'] = 'Updating HotPot grades';
 $string['usefilters'] = 'Use filters';
 $string['usefilters_help'] = 'If this setting is enabled, the content will be passed through the Moodle filters before being sent to the browser.';
 $string['useglossary'] = 'Use glossary';

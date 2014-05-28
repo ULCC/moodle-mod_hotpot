@@ -1,5 +1,4 @@
 <?php
-
 // This file is part of Moodle - http://moodle.org/
 //
 // Moodle is free software: you can redistribute it and/or modify
@@ -16,34 +15,20 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Render an attempt at a HotPot quiz
- * Output format: hp_6_jquiz_html
+ * Subplugin info class.
  *
- * @package   mod-hotpot
- * @copyright 2010 Gordon Bateson <gordon.bateson@gmail.com>
+ * @package   mod_hotpot
+ * @copyright 2013 Petr Skoda {@link http://skodak.org}
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
+namespace mod_hotpot\plugininfo;
+
+use core\plugininfo\base;
 
 defined('MOODLE_INTERNAL') || die();
 
-// get parent class
-require_once($CFG->dirroot.'/mod/hotpot/attempt/hp/6/jquiz/renderer.php');
-
-/**
- * mod_hotpot_attempt_hp_6_jquiz_html_renderer
- *
- * @copyright 2010 Gordon Bateson
- * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @since     Moodle 2.0
- */
-class mod_hotpot_attempt_hp_6_jquiz_html_renderer extends mod_hotpot_attempt_hp_6_jquiz_renderer {
-
-    /**
-     * List of source types which this renderer can handle
-     *
-     * @return array of strings
-     */
-    static public function sourcetypes()  {
-        return array('hp_6_jquiz_html');
+class hotpotsource extends base {
+    public function is_uninstall_allowed() {
+        return true;
     }
 }

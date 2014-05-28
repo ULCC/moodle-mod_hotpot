@@ -16,8 +16,8 @@
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
 /**
- * Render an attempt at a HotPot quiz
- * Output format: hp_6_jcloze_html
+ * Review results of an attempt at a HotPot quiz
+ * Output format: hp_6_jmatch_xml_sort
  *
  * @package   mod-hotpot
  * @copyright 2010 Gordon Bateson <gordon.bateson@gmail.com>
@@ -27,23 +27,14 @@
 defined('MOODLE_INTERNAL') || die();
 
 // get parent class
-require_once($CFG->dirroot.'/mod/hotpot/attempt/hp/6/jcloze/renderer.php');
+require_once($CFG->dirroot.'/mod/hotpot/attempt/hp/6/jmatch/xml/review.php');
 
 /**
- * mod_hotpot_attempt_hp_6_jcloze_html_renderer
+ * mod_hotpot_attempt_hp_6_jmatch_xml_sort_review
  *
  * @copyright 2010 Gordon Bateson
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @since     Moodle 2.0
  */
-class mod_hotpot_attempt_hp_6_jcloze_html_renderer extends mod_hotpot_attempt_hp_6_jcloze_renderer {
-
-    /**
-     * the source file types with which this output format can be used
-     *
-     * @return array of source file types
-     */
-    static public function sourcetypes() {
-        return array('hp_6_jcloze_html');
-    }
+class mod_hotpot_attempt_hp_6_jmatch_xml_sort_review extends mod_hotpot_attempt_hp_6_jmatch_xml_review {
 }

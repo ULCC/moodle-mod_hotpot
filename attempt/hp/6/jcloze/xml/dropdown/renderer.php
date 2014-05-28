@@ -61,7 +61,7 @@ class mod_hotpot_attempt_hp_6_jcloze_xml_dropdown_renderer extends mod_hotpot_at
      *
      * @return array of strings
      */
-    public static function sourcetypes()  {
+    static public function sourcetypes()  {
         return array('hp_6_jcloze_xml');
     }
 
@@ -75,6 +75,13 @@ class mod_hotpot_attempt_hp_6_jcloze_xml_dropdown_renderer extends mod_hotpot_at
         $names = parent::get_js_functionnames();
         $names .= ($names ? ',' : '').'Show_Solution,Build_GapText';
         return $names;
+    }
+
+    /**
+     * fix_headcontent
+     */
+    function fix_headcontent()  {
+        $this->fix_headcontent_rottmeier('dropdown');
     }
 
     /**

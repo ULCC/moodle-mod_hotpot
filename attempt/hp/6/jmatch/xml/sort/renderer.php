@@ -17,7 +17,7 @@
 
 /**
  * Render an attempt at a HotPot quiz
- * Output format: hp_6_jcross_html
+ * Output format: hp_6_jmatch_xml_sort
  *
  * @package   mod-hotpot
  * @copyright 2010 Gordon Bateson <gordon.bateson@gmail.com>
@@ -27,16 +27,35 @@
 defined('MOODLE_INTERNAL') || die();
 
 // get parent class
-require_once($CFG->dirroot.'/mod/hotpot/attempt/hp/6/jcross/renderer.php');
+require_once($CFG->dirroot.'/mod/hotpot/attempt/hp/6/jmatch/xml/renderer.php');
 
 /**
- * mod_hotpot_attempt_hp_6_jcross_html_renderer
+ * mod_hotpot_attempt_hp_6_jmatch_xml_sort_renderer
  *
  * @copyright 2010 Gordon Bateson
  * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @since     Moodle 2.0
  */
-class mod_hotpot_attempt_hp_6_jcross_html_renderer extends mod_hotpot_attempt_hp_6_jcross_renderer {
+class mod_hotpot_attempt_hp_6_jmatch_xml_sort_renderer extends mod_hotpot_attempt_hp_6_jmatch_xml_renderer {
+
+    //public $js_object_type = 'JMatchSort';
+    public $templatefile = 'djmatch6.ht_';
+
+    /**
+     * init
+     *
+     * @param xxx $hotpot
+     */
+    function init($hotpot)  {
+        parent::init($hotpot);
+
+        // prepend templates for this output format
+        array_unshift($this->templatesfolders, 'mod/hotpot/attempt/hp/6/jmatch/xml/sort/templates');
+
+        // replace standard jcloze.js with sort.js
+        //$this->javascripts = preg_grep('/jmatch.js/', $this->javascripts, PREG_GREP_INVERT);
+        //array_push($this->javascripts, 'mod/hotpot/attempt/hp/6/jmatch/sort.js');
+    }
 
     /**
      * List of source types which this renderer can handle
@@ -44,6 +63,17 @@ class mod_hotpot_attempt_hp_6_jcross_html_renderer extends mod_hotpot_attempt_hp
      * @return array of strings
      */
     static public function sourcetypes()  {
-        return array('hp_6_jcross_html');
+        return array('hp_6_jmatch_xml');
+    }
+
+    /**
+     * expand_StyleSheet
+     *
+     * @return xxx
+     */
+    function expand_StyleSheet()  {
+        return $this->expand_template('hp6.cs_').
+               $this->expand_template('corners.cs_').
+               $this->expand_template('shadows.cs_');
     }
 }
